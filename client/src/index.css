@@ -1,0 +1,59 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Bebas+Neue&display=swap');
+
+* {
+  font-family: 'DM Sans', sans-serif;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg:        #0c0f0c;
+  --bg-2:      #101410;
+  --bg-3:      #161c16;
+  --bg-4:      #1c251c;
+  --border:    rgba(163, 230, 53, 0.08);
+  --border-2:  rgba(163, 230, 53, 0.16);
+  --border-3:  rgba(163, 230, 53, 0.28);
+  --text:      #dff0df;
+  --text-dim:  #5a7a5a;
+  --text-mute: #3a4e3a;
+  --lime:      #a3e635;
+  --lime-dark: #0c0f0c;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 28s linear infinite;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-4) var(--bg-2);
+}
+
+*::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--bg-2);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--bg-4);
+  border-radius: 99px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--border-2);
+}
