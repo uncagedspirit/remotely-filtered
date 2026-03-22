@@ -1,0 +1,39 @@
+# deps — covers ALL node_modules anywhere in the repo
+node_modules/
+
+# db
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# env
+.env
+.env.local
+.env.*.local
+
+# build output
+dist/
+build/
+
+# vite
+client/.vite/
+
+# logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# misc
+.qodo/
+*.lock

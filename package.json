@@ -1,0 +1,18 @@
+{
+  "name": "remotely-filtered",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "client",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:client": "npm run dev --workspace=client",
+    "dev:api": "npm run dev --workspace=packages/api",
+    "scrape": "npm run scrape --workspace=packages/scraper",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:client\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
