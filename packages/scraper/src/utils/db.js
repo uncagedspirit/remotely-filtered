@@ -2,14 +2,12 @@ const Database = require('better-sqlite3')
 const path     = require('path')
 const fs       = require('fs')
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../../../data/jobs.db')
+const DB_PATH = path.join(__dirname, '../../../../data/jobs.db')
 
-// make sure data/ dir exists
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
 
 const db = new Database(DB_PATH)
 
-// perf
 db.pragma('journal_mode = WAL')
 db.pragma('synchronous = normal')
 
@@ -36,11 +34,11 @@ db.exec(`
     match_score      REAL
   );
 
-  CREATE INDEX IF NOT EXISTS idx_job_type    ON jobs(job_type);
-  CREATE INDEX IF NOT EXISTS idx_salary_min  ON jobs(salary_min);
-  CREATE INDEX IF NOT EXISTS idx_scraped_at  ON jobs(scraped_at);
-  CREATE INDEX IF NOT EXISTS idx_us_only     ON jobs(us_only);
-  CREATE INDEX IF NOT EXISTS idx_visa        ON jobs(visa_sponsorship);
+  CREATE INDEX IF NOT EXISTS idx_job_type   ON jobs(job_type);
+  CREATE INDEX IF NOT EXISTS idx_salary_min ON jobs(salary_min);
+  CREATE INDEX IF NOT EXISTS idx_scraped_at ON jobs(scraped_at);
+  CREATE INDEX IF NOT EXISTS idx_us_only    ON jobs(us_only);
+  CREATE INDEX IF NOT EXISTS idx_visa       ON jobs(visa_sponsorship);
 `)
 
 function upsertJob(job) {
@@ -65,7 +63,6 @@ function upsertJob(job) {
       salary_max       = excluded.salary_max
   `)
 
-  // sqlite doesn't store arrays — stringify
   stmt.run({
     ...job,
     skills:           JSON.stringify(job.skills),
@@ -96,9 +93,9 @@ function getJobs(filters = {}) {
     params.salary_min = filters.salary_min
   }
 
-  if (filters.experience !== undefined && filters.experience > 0) {
-    conditions.push('(experience_min <= @experience + 1 OR experience_min IS NULL)')
-    params.experience = filters.experience
+  if (filters.experience && filters.experience > 0) {
+    conditions.push('(experience_min <= @exp OR experience_min IS NULL)')
+    params.exp = Number(filters.experience) + 1
   }
 
   if (!filters.show_us_only) {
@@ -109,7 +106,9 @@ function getJobs(filters = {}) {
     conditions.push('visa_sponsorship = 1')
   }
 
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+  const where = conditions.length
+    ? `WHERE ${conditions.join(' AND ')}`
+    : ''
 
   const rows = db.prepare(`
     SELECT * FROM jobs

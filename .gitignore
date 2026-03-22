@@ -2,9 +2,9 @@
 node_modules/
 
 # db
-/data/*.db
-/data/*.db-shm
-/data/*.db-wal
+data/*.db
+data/*.db-shm
+data/*.db-wal
 
 # env
 .env
