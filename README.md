@@ -1,10 +1,18 @@
 # Remotely Filtered
 
-> Remote jobs — filtered for you.
+> Remote jobs, filtered for you.
 
 A full-stack job board that scrapes remote job listings from multiple sources, scores them against your skills, and surfaces the best matches with visa sponsorship and salary transparency.
 
 **Live:** https://remotely-filtered.vercel.app
+
+## Screenshots
+
+<img width="1919" height="911" alt="image" src="https://github.com/user-attachments/assets/622b4a4b-5fb5-438a-b629-e752b3051812" />
+
+<img width="1919" height="913" alt="image" src="https://github.com/user-attachments/assets/1d6a3ffc-835b-4c0a-bbdf-2fc981c52ca0" />
+
+
 
 ---
 
