@@ -1,49 +1,35 @@
 const axios = require('axios')
 const { normalizeJob, parseFlags } = require('../utils/normalize')
 
-// Only pull tech-relevant categories
-const TECH_CATEGORIES = [
-  'software-engineer',
-  'frontend-engineer',
-  'backend-engineer',
-  'full-stack-engineer',
-  'devops-engineer',
-  'data-engineer',
-  'data-scientist',
-  'mobile-engineer',
-]
-
 async function scrapeHimalayas() {
   console.log('[himalayas] starting scrape...')
-  const allJobs = []
-  const seen = new Set()
 
-  for (const category of TECH_CATEGORIES) {
+  // fetch 3 pages of recent jobs — no category filter, API handles that
+  const limit = 20
+  const pages = 3
+  const allJobs = []
+
+  for (let page = 0; page < pages; page++) {
     try {
       const { data } = await axios.get('https://himalayas.app/jobs/api', {
-        params: { limit: 20, offset: 0, q: category },
+        params: { limit, offset: page * limit },
         timeout: 15000,
       })
 
       const jobs = data?.jobs || []
-      let added = 0
+      if (jobs.length === 0) break
 
-      for (const job of jobs) {
-        if (!seen.has(job.guid)) {
-          seen.add(job.guid)
-          allJobs.push(job)
-          added++
-        }
-      }
+      allJobs.push(...jobs)
+      console.log(`[himalayas] page ${page + 1}: +${jobs.length} jobs`)
 
-      console.log(`[himalayas] +${added} jobs for: ${category}`)
       await new Promise(r => setTimeout(r, 800))
     } catch (err) {
-      console.warn(`[himalayas] failed for ${category}:`, err.message)
+      console.warn(`[himalayas] page ${page + 1} failed:`, err.message)
+      break
     }
   }
 
-  console.log(`[himalayas] total unique: ${allJobs.length} jobs`)
+  console.log(`[himalayas] total: ${allJobs.length} jobs`)
 
   return allJobs.map(job => {
     const desc = job.description || job.excerpt || ''
@@ -82,8 +68,8 @@ async function scrapeHimalayas() {
 function normalizeType(type) {
   if (!type) return 'full-time'
   const t = type.toLowerCase()
-  if (t.includes('full'))     return 'full-time'
-  if (t.includes('part'))     return 'part-time'
+  if (t.includes('full'))                              return 'full-time'
+  if (t.includes('part'))                              return 'part-time'
   if (t.includes('contract') || t.includes('freelance')) return 'contract'
   return 'full-time'
 }

@@ -1,7 +1,7 @@
-const express      = require('express')
-const router       = express.Router()
-const { getJobs }  = require('../utils/db')
-const { scoreJob } = require('../utils/score')
+const express                          = require('express')
+const router                           = express.Router()
+const { getJobs }                      = require('../utils/db')
+const { scoreJob, jobPassesSkillFilter } = require('../utils/score')
 
 router.get('/', (req, res) => {
   try {
@@ -19,6 +19,7 @@ router.get('/', (req, res) => {
       ? skills.split(',').map(s => s.trim()).filter(Boolean)
       : []
 
+    // Step 1: get jobs from DB with basic SQL filters
     const jobs = getJobs({
       job_type:     jobType,
       salary_min:   salaryMin ? Number(salaryMin) : null,
@@ -26,52 +27,47 @@ router.get('/', (req, res) => {
       show_no_visa: showNoVisa === 'true',
     })
 
-    // Score every job against selected skills
+    // Step 2: score every job
     const scored = jobs.map(job => ({
       ...job,
       match_score: scoreJob(job, selectedSkills),
     }))
 
-    // --- Keyword filter ---
+    // Step 3: HARD skill filter
+    // If skills selected, job MUST match at least one in title or skills tags
+    // Description alone doesn't count — avoids false positives
+    const skillFiltered = selectedSkills.length > 0
+      ? scored.filter(job => jobPassesSkillFilter(job, selectedSkills))
+      : scored
+
+    // Step 4: keyword filter
     const keywordFiltered = keyword
-      ? scored.filter(job => {
+      ? skillFiltered.filter(job => {
           const text = `${job.title} ${job.company} ${job.description}`.toLowerCase()
           return text.includes(keyword.toLowerCase())
         })
-      : scored
+      : skillFiltered
 
-    // --- Skill filter ---
-    // If skills are selected, ONLY show jobs that match at least one skill
-    // The threshold scales: 1 skill = must match it, 2+ skills = must match at least 1
-    const skillFiltered = selectedSkills.length > 0
-      ? keywordFiltered.filter(job => job.match_score > 0)
-      : keywordFiltered
-
-    // --- Salary filter ---
-    const salaryTarget = salaryMin ? Number(salaryMin) : null
-    const salaryMax_n  = salaryMax ? Number(salaryMax) : null
-
-    const salaryFiltered = skillFiltered.filter(job => {
-      // Jobs with no salary listed are always included
-      if (!job.salary_min) return true
-      // Must be above salaryMin if set
-      if (salaryTarget && job.salary_min < salaryTarget) return false
-      // Must be below salaryMax if set
-      if (salaryMax_n && job.salary_max && job.salary_max > salaryMax_n) return false
-      return true
+    // Step 5: salary max filter (min is handled in DB query)
+    const salaryMax_n = salaryMax ? Number(salaryMax) : null
+    const salaryFiltered = keywordFiltered.filter(job => {
+      if (!salaryMax_n) return true
+      if (!job.salary_max) return true
+      return job.salary_max <= salaryMax_n
     })
 
-    // --- Sort: by match score desc, then by scraped_at desc ---
-    const results = salaryFiltered
-      .sort((a, b) => {
-        if (b.match_score !== a.match_score) return b.match_score - a.match_score
-        return (b.scraped_at || 0) - (a.scraped_at || 0)
-      })
+    // Step 6: sort — highest match score first, then newest
+    const results = salaryFiltered.sort((a, b) => {
+      if (b.match_score !== a.match_score) return b.match_score - a.match_score
+      return (b.scraped_at || 0) - (a.scraped_at || 0)
+    })
 
-    // --- Just in case: below salary but strong skill match ---
+    // Step 7: just in case — below salary but strong skill match
+    const salaryTarget = salaryMin ? Number(salaryMin) : null
     const justInCase = salaryTarget
-      ? skillFiltered
+      ? scored
           .filter(job =>
+            jobPassesSkillFilter(job, selectedSkills) &&
             job.salary_min &&
             job.salary_min < salaryTarget &&
             job.match_score >= 50

@@ -5,18 +5,18 @@ const SKILL_SYNONYMS = {
   'Vue':           ['vue', 'vuejs', 'vue.js', 'nuxt', 'nuxtjs'],
   'Angular':       ['angular', 'angularjs'],
   'Svelte':        ['svelte', 'sveltekit'],
-  'Node.js':       ['node', 'nodejs', 'node.js', 'express', 'fastify', 'nestjs', 'hapi'],
-  'Python':        ['python', 'django', 'flask', 'fastapi', 'py'],
+  'Node.js':       ['node', 'nodejs', 'node.js', 'express', 'fastify', 'nestjs'],
+  'Python':        ['python', 'django', 'flask', 'fastapi'],
   'TypeScript':    ['typescript', 'ts'],
-  'JavaScript':    ['javascript', 'js', 'es6', 'es2015', 'vanilla js', 'vanilla javascript'],
+  'JavaScript':    ['javascript', 'js', 'es6', 'vanilla js'],
   'Go':            ['go', 'golang'],
-  'Rust':          ['rust', 'rustlang'],
+  'Rust':          ['rust'],
   'Java':          ['java', 'spring', 'springboot', 'spring boot'],
   'Kotlin':        ['kotlin'],
-  'Swift':         ['swift', 'swiftui', 'ios'],
+  'Swift':         ['swift', 'swiftui'],
   'Ruby':          ['ruby', 'rails', 'ruby on rails'],
   'PHP':           ['php', 'laravel', 'symfony'],
-  'C#':            ['c#', 'csharp', '.net', 'dotnet', 'asp.net'],
+  'C#':            ['c#', 'csharp', '.net', 'dotnet'],
   'C++':           ['c++', 'cpp'],
   'GraphQL':       ['graphql', 'apollo', 'gql'],
   'REST':          ['rest', 'restful', 'rest api'],
@@ -27,46 +27,57 @@ const SKILL_SYNONYMS = {
   'Redis':         ['redis'],
   'Elasticsearch': ['elasticsearch', 'elastic', 'opensearch'],
   'Supabase':      ['supabase'],
-  'AWS':           ['aws', 'amazon web services', 'ec2', 's3', 'lambda', 'cloudfront'],
-  'GCP':           ['gcp', 'google cloud', 'google cloud platform'],
+  'AWS':           ['aws', 'amazon web services', 'ec2', 's3', 'lambda'],
+  'GCP':           ['gcp', 'google cloud'],
   'Azure':         ['azure', 'microsoft azure'],
-  'Docker':        ['docker', 'containerization', 'containers'],
-  'Kubernetes':    ['kubernetes', 'k8s', 'eks', 'gke', 'aks'],
-  'Terraform':     ['terraform', 'iac', 'infrastructure as code'],
-  'CI/CD':         ['ci/cd', 'github actions', 'jenkins', 'circleci', 'gitlab ci'],
+  'Docker':        ['docker'],
+  'Kubernetes':    ['kubernetes', 'k8s'],
+  'Terraform':     ['terraform'],
+  'CI/CD':         ['ci/cd', 'github actions', 'jenkins', 'circleci'],
   'Tailwind':      ['tailwind', 'tailwindcss'],
   'Figma':         ['figma'],
   'PyTorch':       ['pytorch'],
   'TensorFlow':    ['tensorflow'],
   'LangChain':     ['langchain'],
-  'Solidity':      ['solidity', 'web3', 'blockchain', 'smart contracts', 'ethereum'],
+  'Solidity':      ['solidity', 'web3', 'blockchain'],
 }
 
-function textMatchesSkill(text, skillLabel) {
+function matchesSkill(text, skillLabel) {
   const synonyms = SKILL_SYNONYMS[skillLabel] || [skillLabel.toLowerCase()]
-  const lowerText = text.toLowerCase()
   return synonyms.some(syn => {
     const escaped = syn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return new RegExp(`\\b${escaped}\\b`, 'i').test(lowerText)
+    return new RegExp(`\\b${escaped}\\b`, 'i').test(text)
   })
 }
 
+// STRICT match: skill must appear in title OR in skills tags
+// Description alone is NOT enough — that avoids "we used Python internally" false positives
+function jobMatchesSkill(job, skillLabel) {
+  const titleMatch  = matchesSkill(job.title || '', skillLabel)
+  const skillsMatch = matchesSkill(
+    (Array.isArray(job.skills) ? job.skills : []).join(' '),
+    skillLabel
+  )
+  return titleMatch || skillsMatch
+}
+
+// Score 0-100 based on how many selected skills strictly match
 function scoreJob(job, selectedSkills) {
   if (!selectedSkills || selectedSkills.length === 0) return 0
 
-  // Build a rich haystack: title weighted 3x, skills 2x, description 1x
-  const titleText       = (job.title || '').repeat(3)
-  const skillsText      = (Array.isArray(job.skills) ? job.skills.join(' ') : '').repeat(2)
-  const descriptionText = job.description || ''
-
-  const haystack = [titleText, skillsText, descriptionText].join(' ')
-
   let matched = 0
   for (const skill of selectedSkills) {
-    if (textMatchesSkill(haystack, skill)) matched++
+    if (jobMatchesSkill(job, skill)) matched++
   }
 
   return Math.round((matched / selectedSkills.length) * 100)
 }
 
-module.exports = { scoreJob, textMatchesSkill }
+// Used by the API route to hard-filter jobs
+// Returns true only if the job matches AT LEAST ONE selected skill strictly
+function jobPassesSkillFilter(job, selectedSkills) {
+  if (!selectedSkills || selectedSkills.length === 0) return true
+  return selectedSkills.some(skill => jobMatchesSkill(job, skill))
+}
+
+module.exports = { scoreJob, jobPassesSkillFilter }

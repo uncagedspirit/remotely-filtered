@@ -8,6 +8,7 @@ async function scrapeArbeitnow() {
     timeout: 15000,
   })
 
+  // grab ALL remote jobs — filtering happens in the API, not here
   const raw = (data?.data || []).filter(job => job.remote)
   console.log(`[arbeitnow] got ${raw.length} remote jobs`)
 
