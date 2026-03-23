@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 
-const API = 'http://localhost:3001'
+const API = ''
 
 export function useJobs(filters, enabled) {
   return useQuery({

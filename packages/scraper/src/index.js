@@ -5,15 +5,16 @@ const { scrapeRemoteOK }  = require('./sources/remoteok')
 const { scrapeArbeitnow } = require('./sources/arbeitnow')
 const { scrapeJobicy }    = require('./sources/jobicy')
 const { scrapeHimalayas } = require('./sources/himalayas')
-const { upsertJobs, pruneOldJobs } = require('./utils/db')
+const { initDb, upsertJobs, pruneOldJobs } = require('./utils/db')
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 async function runScraper() {
   console.log('=== scraper started ===')
 
-  // Remove jobs older than 7 days from the DB before adding new ones
-  const pruned = pruneOldJobs()
+  await initDb()
+
+  const pruned = await pruneOldJobs()
   console.log(`[db] pruned ${pruned} stale jobs`)
 
   const results = await Promise.allSettled([
@@ -31,14 +32,13 @@ async function runScraper() {
     if (result.status === 'fulfilled') {
       const jobs = result.value
 
-      // Only keep jobs posted or scraped within the last 7 days
       const fresh = jobs.filter(job => {
         const ts = job.posted_at || job.scraped_at
         return !ts || ts >= cutoff
       })
 
       if (fresh.length > 0) {
-        upsertJobs(fresh)
+        await upsertJobs(fresh)
         const source = fresh[0]?.source || 'unknown'
         console.log(`[db] wrote ${fresh.length}/${jobs.length} fresh jobs from ${source}`)
         total += fresh.length

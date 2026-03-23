@@ -1,9 +1,9 @@
-const express                          = require('express')
-const router                           = express.Router()
-const { getJobs }                      = require('../utils/db')
+const express                            = require('express')
+const router                             = express.Router()
+const { getJobs }                        = require('../utils/db')
 const { scoreJob, jobPassesSkillFilter } = require('../utils/score')
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const {
       skills     = '',
@@ -20,7 +20,7 @@ router.get('/', (req, res) => {
       : []
 
     // Step 1: get jobs from DB with basic SQL filters
-    const jobs = getJobs({
+    const jobs = await getJobs({
       job_type:     jobType,
       salary_min:   salaryMin ? Number(salaryMin) : null,
       experience:   Number(experience),
@@ -33,9 +33,7 @@ router.get('/', (req, res) => {
       match_score: scoreJob(job, selectedSkills),
     }))
 
-    // Step 3: HARD skill filter
-    // If skills selected, job MUST match at least one in title or skills tags
-    // Description alone doesn't count — avoids false positives
+    // Step 3: hard skill filter
     const skillFiltered = selectedSkills.length > 0
       ? scored.filter(job => jobPassesSkillFilter(job, selectedSkills))
       : scored
@@ -48,7 +46,7 @@ router.get('/', (req, res) => {
         })
       : skillFiltered
 
-    // Step 5: salary max filter (min is handled in DB query)
+    // Step 5: salary max filter
     const salaryMax_n = salaryMax ? Number(salaryMax) : null
     const salaryFiltered = keywordFiltered.filter(job => {
       if (!salaryMax_n) return true
