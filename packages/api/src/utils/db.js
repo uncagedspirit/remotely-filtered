@@ -119,15 +119,16 @@ function upsertJobs(jobs) {
 /** Remove jobs older than 7 days. Returns count deleted. */
 function pruneOldJobs() {
   const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000)
-  const result = db.prepare(`
-    DELETE FROM jobs WHERE scraped_at < @cutoff
-  `).run({ cutoff })
+  const result = db.prepare(`DELETE FROM jobs WHERE scraped_at < @cutoff`).run({ cutoff })
   return result.changes
 }
 
 function getJobs(filters = {}) {
   const conditions = []
   const params     = {}
+
+  conditions.push('scraped_at >= @scraped_since')
+  params.scraped_since = Date.now() - (7 * 24 * 60 * 60 * 1000)
 
   if (filters.job_type && filters.job_type !== 'any') {
     conditions.push('job_type = @job_type')
@@ -140,7 +141,7 @@ function getJobs(filters = {}) {
   }
 
   if (filters.experience && filters.experience > 0) {
-    conditions.push('(experience_min <= @exp OR experience_min IS NULL)')
+    conditions.push('(experience_min >= @exp OR experience_min IS NULL)')
     params.exp = Number(filters.experience)
   }
 
@@ -152,15 +153,10 @@ function getJobs(filters = {}) {
     conditions.push('visa_sponsorship = 1')
   }
 
-  const where = conditions.length
-    ? `WHERE ${conditions.join(' AND ')}`
-    : ''
+  const where = `WHERE ${conditions.join(' AND ')}`
 
   const rows = db.prepare(`
-    SELECT * FROM jobs
-    ${where}
-    ORDER BY scraped_at DESC
-    LIMIT 500
+    SELECT * FROM jobs ${where} ORDER BY scraped_at DESC LIMIT 500
   `).all(params)
 
   return rows.map(row => ({

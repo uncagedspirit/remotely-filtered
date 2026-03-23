@@ -7,12 +7,13 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:client": "npm run dev --workspace=client",
-    "dev:api": "npm run dev --workspace=packages/api",
-    "scrape": "npm run scrape --workspace=packages/scraper",
+    "dev:client":   "npm run dev --workspace=client",
+    "dev:api":      "npm run dev --workspace=packages/api",
+    "scrape":       "npm run scrape --workspace=packages/scraper",
+    "schedule":     "npm run schedule --workspace=packages/scraper",
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:client\""
   },
   "devDependencies": {
     "concurrently": "^8.2.0"
   }
-}
+} 

@@ -4,7 +4,6 @@ const { normalizeJob, parseFlags } = require('../utils/normalize')
 async function scrapeJobicy() {
   console.log('[jobicy] starting scrape...')
 
-  // scrape all jobs — no category filtering, that's the API's job
   const { data } = await axios.get('https://jobicy.com/api/v2/remote-jobs', {
     params: { count: 50 },
     timeout: 15000,
@@ -15,6 +14,11 @@ async function scrapeJobicy() {
 
   return raw.map(job => {
     const { us_only, visa_sponsorship } = parseFlags(job.jobDescription || '')
+
+    // jobType can sometimes be an array — take first element, fallback to string
+    const rawType = Array.isArray(job.jobType) ? job.jobType[0] : job.jobType
+    const jobType = typeof rawType === 'string' ? rawType : 'full-time'
+
     return normalizeJob({
       id:             `jobicy_${job.id}`,
       title:          job.jobTitle,
@@ -25,7 +29,7 @@ async function scrapeJobicy() {
       salary_max:     job.annualSalaryMax || null,
       salary_raw:     job.jobSalary || null,
       skills:         Array.isArray(job.jobIndustry) ? job.jobIndustry : [],
-      job_type:       job.jobType || 'full-time',
+      job_type:       jobType,
       experience_raw: null,
       posted_at:      job.pubDate,
       source:         'Jobicy',
