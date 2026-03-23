@@ -1,12 +1,3 @@
-const { createClient } = require('@libsql/client')
-
-const db = createClient({
-  url:       process.env.TURSO_URL,
-  authToken: process.env.TURSO_AUTH_TOKEN,
-})
-
-// ── score helpers ─────────────────────────────────────────
-
 const SKILL_SYNONYMS = {
   'React':         ['react', 'reactjs', 'react.js', 'react js'],
   'React Native':  ['react native', 'react-native'],
@@ -21,10 +12,7 @@ const SKILL_SYNONYMS = {
   'Go':            ['go', 'golang'],
   'Rust':          ['rust'],
   'Java':          ['java', 'spring', 'springboot', 'spring boot'],
-  'Kotlin':        ['kotlin'],
-  'Swift':         ['swift', 'swiftui'],
   'GraphQL':       ['graphql', 'apollo', 'gql'],
-  'REST':          ['rest', 'restful', 'rest api'],
   'PostgreSQL':    ['postgresql', 'postgres', 'psql'],
   'MySQL':         ['mysql'],
   'MongoDB':       ['mongodb', 'mongo', 'mongoose'],
@@ -34,30 +22,19 @@ const SKILL_SYNONYMS = {
   'Azure':         ['azure', 'microsoft azure'],
   'Docker':        ['docker'],
   'Kubernetes':    ['kubernetes', 'k8s'],
-  'Terraform':     ['terraform'],
-  'CI/CD':         ['ci/cd', 'github actions', 'jenkins', 'circleci'],
-  'Tailwind':      ['tailwind', 'tailwindcss'],
-  'PyTorch':       ['pytorch'],
-  'TensorFlow':    ['tensorflow'],
-  'LangChain':     ['langchain'],
-  'Solidity':      ['solidity', 'web3', 'blockchain'],
 }
 
 function matchesSkill(text, skillLabel) {
   const synonyms = SKILL_SYNONYMS[skillLabel] || [skillLabel.toLowerCase()]
   return synonyms.some(syn => {
     const escaped = syn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return new RegExp(`\\b${escaped}\\b`, 'i').test(text)
+    return new RegExp('\\b' + escaped + '\\b', 'i').test(text)
   })
 }
 
 function jobMatchesSkill(job, skillLabel) {
-  const titleMatch  = matchesSkill(job.title || '', skillLabel)
-  const skillsMatch = matchesSkill(
-    (Array.isArray(job.skills) ? job.skills : []).join(' '),
-    skillLabel
-  )
-  return titleMatch || skillsMatch
+  return matchesSkill(job.title || '', skillLabel) ||
+    matchesSkill((Array.isArray(job.skills) ? job.skills : []).join(' '), skillLabel)
 }
 
 function scoreJob(job, selectedSkills) {
@@ -74,7 +51,31 @@ function jobPassesSkillFilter(job, selectedSkills) {
   return selectedSkills.some(skill => jobMatchesSkill(job, skill))
 }
 
-// ── handler ───────────────────────────────────────────────
+async function tursoQuery(sql) {
+  const url = process.env.TURSO_URL.replace('libsql://', 'https://') + '/v2/pipeline'
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + process.env.TURSO_AUTH_TOKEN,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [
+        { type: 'execute', stmt: { sql } },
+        { type: 'close' },
+      ],
+    }),
+  })
+  const data = await res.json()
+  if (data.results && data.results[0] && data.results[0].type === 'error') {
+    throw new Error(data.results[0].error.message)
+  }
+  const result = data.results[0].response.result
+  const cols = result.cols.map(c => c.name)
+  return result.rows.map(row =>
+    Object.fromEntries(cols.map((col, i) => [col, row[i] ? row[i].value : null]))
+  )
+}
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -96,37 +97,31 @@ module.exports = async function handler(req, res) {
       ? skills.split(',').map(s => s.trim()).filter(Boolean)
       : []
 
-    const conditions = ['scraped_at >= $scraped_since']
-    const args       = { scraped_since: Date.now() - (7 * 24 * 60 * 60 * 1000) }
+    const scraped_since = Date.now() - (7 * 24 * 60 * 60 * 1000)
+    const conditions = ['scraped_at >= ' + scraped_since, 'us_only = 0']
 
     if (jobType && jobType !== 'any') {
-      conditions.push('job_type = $job_type')
-      args.job_type = jobType
+      conditions.push("job_type = '" + jobType.replace(/'/g, "''") + "'")
     }
     if (salaryMin) {
-      conditions.push('(salary_min >= $salary_min OR salary_min IS NULL)')
-      args.salary_min = Number(salaryMin)
+      conditions.push('(salary_min >= ' + Number(salaryMin) + ' OR salary_min IS NULL)')
     }
     if (Number(experience) > 0) {
-      conditions.push('(experience_min <= $exp OR experience_min IS NULL)')
-      args.exp = Number(experience)
+      conditions.push('(experience_min <= ' + Number(experience) + ' OR experience_min IS NULL)')
     }
-    conditions.push('us_only = 0')
     if (showNoVisa !== 'true') {
       conditions.push('visa_sponsorship = 1')
     }
 
-    const result = await db.execute({
-      sql:  `SELECT * FROM jobs WHERE ${conditions.join(' AND ')} ORDER BY scraped_at DESC LIMIT 500`,
-      args,
-    })
+    const sql = 'SELECT * FROM jobs WHERE ' + conditions.join(' AND ') + ' ORDER BY scraped_at DESC LIMIT 500'
+    const rows = await tursoQuery(sql)
 
-    const jobs = result.rows.map(row => ({
+    const jobs = rows.map(row => ({
       ...row,
-      skills:           JSON.parse(row.skills || '[]'),
-      visa_sponsorship: row.visa_sponsorship === 1,
-      us_only:          row.us_only === 1,
-      is_stale:         row.is_stale === 1,
+      skills:           (function() { try { return JSON.parse(row.skills || '[]') } catch(e) { return [] } })(),
+      visa_sponsorship: row.visa_sponsorship == 1,
+      us_only:          row.us_only == 1,
+      is_stale:         row.is_stale == 1,
     }))
 
     const scored = jobs.map(job => ({
@@ -140,15 +135,14 @@ module.exports = async function handler(req, res) {
 
     const keywordFiltered = keyword
       ? skillFiltered.filter(job => {
-          const text = `${job.title} ${job.company} ${job.description}`.toLowerCase()
+          const text = (job.title + ' ' + job.company + ' ' + job.description).toLowerCase()
           return text.includes(keyword.toLowerCase())
         })
       : skillFiltered
 
     const salaryMax_n = salaryMax ? Number(salaryMax) : null
     const salaryFiltered = keywordFiltered.filter(job => {
-      if (!salaryMax_n) return true
-      if (!job.salary_max) return true
+      if (!salaryMax_n || !job.salary_max) return true
       return job.salary_max <= salaryMax_n
     })
 
@@ -173,7 +167,7 @@ module.exports = async function handler(req, res) {
     res.json({ count: results.length, results, justInCase })
 
   } catch (err) {
-    console.error('[api] /jobs error:', err.message)
+    console.error('[api] error:', err.message)
     res.status(500).json({ error: err.message })
   }
 }
