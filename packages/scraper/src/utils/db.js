@@ -41,6 +41,27 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_visa       ON jobs(visa_sponsorship);
 `)
 
+function toStr(val) {
+  if (val === null || val === undefined) return null
+  if (typeof val === 'string') return val
+  if (typeof val === 'number' || typeof val === 'bigint') return String(val)
+  if (Array.isArray(val)) return val.join(', ')
+  if (typeof val === 'object') return JSON.stringify(val)
+  return String(val)
+}
+
+function toNum(val) {
+  if (val === null || val === undefined) return null
+  const n = Number(val)
+  return isNaN(n) ? null : n
+}
+
+function toInt(val) {
+  if (val === null || val === undefined) return null
+  const n = parseInt(val)
+  return isNaN(n) ? null : n
+}
+
 function upsertJob(job) {
   const stmt = db.prepare(`
     INSERT INTO jobs (
@@ -64,11 +85,25 @@ function upsertJob(job) {
   `)
 
   stmt.run({
-    ...job,
-    skills:           JSON.stringify(job.skills),
+    id:               toStr(job.id) || `job_${Date.now()}_${Math.random()}`,
+    title:            toStr(job.title),
+    company:          toStr(job.company),
+    description:      toStr(job.description),
+    url:              toStr(job.url),
+    salary_min:       toNum(job.salary_min),
+    salary_max:       toNum(job.salary_max),
+    salary_raw:       toStr(job.salary_raw),
+    skills:           JSON.stringify(Array.isArray(job.skills) ? job.skills : []),
+    job_type:         toStr(job.job_type),
+    experience_raw:   toStr(job.experience_raw),
+    experience_min:   toInt(job.experience_min),
+    posted_at:        toNum(job.posted_at),
+    scraped_at:       toNum(job.scraped_at) || Date.now(),
+    source:           toStr(job.source),
     visa_sponsorship: job.visa_sponsorship ? 1 : 0,
     us_only:          job.us_only ? 1 : 0,
     is_stale:         job.is_stale ? 1 : 0,
+    match_score:      toNum(job.match_score),
   })
 }
 
@@ -114,7 +149,7 @@ function getJobs(filters = {}) {
     SELECT * FROM jobs
     ${where}
     ORDER BY scraped_at DESC
-    LIMIT 200
+    LIMIT 500
   `).all(params)
 
   return rows.map(row => ({

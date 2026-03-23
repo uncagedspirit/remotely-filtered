@@ -26,11 +26,13 @@ router.get('/', (req, res) => {
       show_no_visa: showNoVisa === 'true',
     })
 
+    // Score every job against selected skills
     const scored = jobs.map(job => ({
       ...job,
       match_score: scoreJob(job, selectedSkills),
     }))
 
+    // --- Keyword filter ---
     const keywordFiltered = keyword
       ? scored.filter(job => {
           const text = `${job.title} ${job.company} ${job.description}`.toLowerCase()
@@ -38,16 +40,44 @@ router.get('/', (req, res) => {
         })
       : scored
 
+    // --- Skill filter ---
+    // If skills are selected, ONLY show jobs that match at least one skill
+    // The threshold scales: 1 skill = must match it, 2+ skills = must match at least 1
+    const skillFiltered = selectedSkills.length > 0
+      ? keywordFiltered.filter(job => job.match_score > 0)
+      : keywordFiltered
+
+    // --- Salary filter ---
     const salaryTarget = salaryMin ? Number(salaryMin) : null
+    const salaryMax_n  = salaryMax ? Number(salaryMax) : null
 
-    const results = keywordFiltered
-      .filter(job => !salaryTarget || !job.salary_min || job.salary_min >= salaryTarget)
-      .sort((a, b) => b.match_score - a.match_score)
+    const salaryFiltered = skillFiltered.filter(job => {
+      // Jobs with no salary listed are always included
+      if (!job.salary_min) return true
+      // Must be above salaryMin if set
+      if (salaryTarget && job.salary_min < salaryTarget) return false
+      // Must be below salaryMax if set
+      if (salaryMax_n && job.salary_max && job.salary_max > salaryMax_n) return false
+      return true
+    })
 
+    // --- Sort: by match score desc, then by scraped_at desc ---
+    const results = salaryFiltered
+      .sort((a, b) => {
+        if (b.match_score !== a.match_score) return b.match_score - a.match_score
+        return (b.scraped_at || 0) - (a.scraped_at || 0)
+      })
+
+    // --- Just in case: below salary but strong skill match ---
     const justInCase = salaryTarget
-      ? keywordFiltered
-          .filter(job => job.salary_min && job.salary_min < salaryTarget && job.match_score >= 50)
-          .slice(0, 5)
+      ? skillFiltered
+          .filter(job =>
+            job.salary_min &&
+            job.salary_min < salaryTarget &&
+            job.match_score >= 50
+          )
+          .sort((a, b) => b.match_score - a.match_score)
+          .slice(0, 6)
       : []
 
     res.json({ count: results.length, results, justInCase })
