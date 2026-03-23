@@ -19,11 +19,12 @@ function normalizeJob({
   visa_sponsorship,
   us_only,
 }) {
+  const cleanDesc = clean(description)
   return {
     id:               id || require('crypto').randomUUID(),
     title:            clean(title),
     company:          clean(company),
-    description:      clean(description),
+    description:      cleanDesc,
     url:              url || null,
 
     salary_min:       toNumber(salary_min),
@@ -33,18 +34,17 @@ function normalizeJob({
     skills:           Array.isArray(skills) ? skills : [],
     job_type:         normalizeJobType(job_type),
     experience_raw:   experience_raw || null,
-    experience_min:   parseExperienceMin(experience_raw),
+    // Try dedicated field first, fall back to scanning description
+    experience_min:   parseExperienceMin(experience_raw, cleanDesc),
 
     posted_at:        toTimestamp(posted_at),
     scraped_at:       Date.now(),
     source:           source || 'unknown',
 
-    // flags
     visa_sponsorship: visa_sponsorship === true,
     us_only:          us_only === true,
     is_stale:         isStale(posted_at),
 
-    // scoring — filled in later by search layer
     match_score:      null,
   }
 }
@@ -72,7 +72,7 @@ function isStale(posted_at) {
   if (!posted_at) return false
   const posted = new Date(posted_at).getTime()
   const days   = (Date.now() - posted) / (1000 * 60 * 60 * 24)
-  return days > 30
+  return days > 7
 }
 
 function normalizeJobType(raw) {
@@ -85,15 +85,43 @@ function normalizeJobType(raw) {
   return 'unknown'
 }
 
-function parseExperienceMin(raw) {
-  if (!raw) return null
-  // matches: "2+ years", "2-4 years", "at least 3 years", "3 years"
-  const match = String(raw).match(/(\d+)\s*[-+]?\s*(?:to\s*\d+\s*)?years?/i)
-  return match ? parseInt(match[1]) : null
+/**
+ * Parse the minimum years of experience required.
+ * First tries the dedicated field, then scans the description text.
+ * Returns the LOWEST number found (the minimum requirement).
+ */
+function parseExperienceMin(experienceRaw, description) {
+  // 1. Try the dedicated experience_raw field first
+  if (experienceRaw) {
+    const m = String(experienceRaw).match(/(\d+)\s*[-+]?\s*(?:to\s*\d+\s*)?years?/i)
+    if (m) return parseInt(m[1])
+  }
+
+  // 2. Scan description with ordered patterns (most specific first)
+  if (description) {
+    const patterns = [
+      /(\d+)\s*\+\s*years?\s+(?:of\s+)?experience/i,          // "3+ years of experience"
+      /minimum\s+(?:of\s+)?(\d+)\s+years?/i,                  // "minimum of 3 years"
+      /at\s+least\s+(\d+)\s+years?/i,                          // "at least 3 years"
+      /(\d+)\s*[-–]\s*\d+\s+years?\s+(?:of\s+)?experience/i,  // "3-5 years of experience"
+      /(\d+)\s+years?\s+(?:of\s+)?(?:relevant\s+|related\s+|professional\s+)?experience/i, // "3 years experience"
+      /experience\s*(?:of\s+)?(\d+)\s*\+?\s*years?/i,         // "experience of 3+ years"
+      /requires?\s+(\d+)\s+years?/i,                           // "requires 3 years"
+    ]
+
+    const found = []
+    for (const pattern of patterns) {
+      const m = description.match(pattern)
+      if (m) found.push(parseInt(m[1]))
+    }
+
+    if (found.length > 0) return Math.min(...found)
+  }
+
+  return null
 }
 
 // ── visa / US-only parser ─────────────────────────────────
-// call this on the raw description text before normalizing
 
 function parseFlags(description) {
   const text = (description || '').toLowerCase()

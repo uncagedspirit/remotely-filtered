@@ -1,7 +1,9 @@
-export default function JobList({ data, isLoading, isError }) {
+export default function JobList({ data, isLoading, isError, mode }) {
   if (isLoading) return (
     <div className="flex items-center justify-center h-full">
-      <p className="text-sm" style={{ color: 'var(--text-mute)' }}>Searching...</p>
+      <p className="text-sm" style={{ color: 'var(--text-mute)' }}>
+        {mode === 'all' ? 'Loading recent jobs...' : 'Searching...'}
+      </p>
     </div>
   )
 
@@ -13,7 +15,9 @@ export default function JobList({ data, isLoading, isError }) {
 
   if (!data?.results?.length) return (
     <div className="flex items-center justify-center h-full">
-      <p className="text-sm" style={{ color: 'var(--text-mute)' }}>No jobs found. Try different filters.</p>
+      <p className="text-sm" style={{ color: 'var(--text-mute)' }}>
+        {mode === 'all' ? 'No recent jobs found. Run the scraper first.' : 'No jobs found. Try different filters.'}
+      </p>
     </div>
   )
 
@@ -22,7 +26,10 @@ export default function JobList({ data, isLoading, isError }) {
 
       <div className="flex items-center justify-between mb-6">
         <p className="text-xs tracking-widest uppercase" style={{ color: 'var(--text-mute)' }}>
-          {data.results.length} results
+          {mode === 'all'
+            ? `${data.results.length} recent jobs · use filters to narrow down`
+            : `${data.results.length} results`
+          }
         </p>
       </div>
 
@@ -82,16 +89,18 @@ function JobCard({ job }) {
               {job.company}
             </p>
           </div>
-          <span
-            className="text-xs px-2 py-0.5 rounded-full shrink-0 font-medium"
-            style={{
-              background: 'var(--bg-3)',
-              color: scoreColor,
-              border: `1px solid ${scoreColor}22`,
-            }}
-          >
-            {job.match_score}%
-          </span>
+          {job.match_score > 0 && (
+            <span
+              className="text-xs px-2 py-0.5 rounded-full shrink-0 font-medium"
+              style={{
+                background: 'var(--bg-3)',
+                color: scoreColor,
+                border: `1px solid ${scoreColor}22`,
+              }}
+            >
+              {job.match_score}%
+            </span>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-1.5 mb-3">

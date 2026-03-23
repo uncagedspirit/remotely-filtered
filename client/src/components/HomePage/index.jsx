@@ -6,7 +6,7 @@ const HOW_IT_WORKS = [
 
 const SKILLS_FLOAT = ['React', 'Node.js', 'Python', 'TypeScript', 'Go', 'AWS', 'Docker', 'GraphQL', 'Next.js', 'Rust', 'PostgreSQL']
 
-export default function HomePage({ onSearch }) {
+export default function HomePage({ onSearch, onViewAll }) {
   return (
     <div className="h-full flex flex-col overflow-hidden select-none">
 
@@ -32,7 +32,8 @@ export default function HomePage({ onSearch }) {
             <span style={{ color: 'var(--lime)' }}>fits.</span>
           </h2>
 
-          <div className="flex items-center gap-5 mt-2">
+          <div className="flex items-center gap-3 mt-2 flex-wrap">
+            {/* Primary: filter-based search */}
             <button
               onClick={onSearch}
               className="px-7 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-opacity"
@@ -40,10 +41,32 @@ export default function HomePage({ onSearch }) {
               onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
               onMouseLeave={e => e.currentTarget.style.opacity = '1'}
             >
-              Start searching →
+              Search with filters →
             </button>
-            <span className="text-sm" style={{ color: 'var(--text-mute)' }}>
-              ← configure filters first
+
+            {/* Secondary: browse everything recent */}
+            <button
+              onClick={onViewAll}
+              className="px-7 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all"
+              style={{
+                border: '1px solid var(--border-2)',
+                color: 'var(--text-dim)',
+                background: 'transparent',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = 'var(--border-3)'
+                e.currentTarget.style.color = 'var(--text)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'var(--border-2)'
+                e.currentTarget.style.color = 'var(--text-dim)'
+              }}
+            >
+              View all jobs
+            </button>
+
+            <span className="text-sm w-full" style={{ color: 'var(--text-mute)' }}>
+              ← configure filters first, or browse all recent openings
             </span>
           </div>
         </div>
